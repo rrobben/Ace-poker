@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ace Poker</title>
+  <meta charset="utf-8"/>
+  <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+  <script>
+
+
+  /* global $, alert */
+
+  $(document).ready( function() {
+    "use strict";
+
+  // These variables track the state of this "game"
+
+	var deck = []
+  var hand = new Array(5);
+
+  var money = 200;
+
+  var bid = 50;
+  var game_state = "bid";
+
+  var minimum_bid = 10;
+  var maximum_bid = 200;
+
+  var locked = [ false, false, false, false, false ];
+  var flush = false;
+  var aces = 0;
+  var fours = false;
+  var straight = false;
+  var threes = false;
+  var pairs = 0;
+  var result = 0;
+  var winnings = 0;
+  var info = "";
+
+  function sendScore(score) {
+      var msg = {
+        "messageType": "SCORE",
+        "score": parseInt(score)
+      };
+      window.parent.postMessage(msg, "*");
+    }
+
+	function saveGame() {
+      var msg = {
+        "messageType": "SAVE",
+        "gameState": {
+          "money": parseInt(money)
+        }
+      };
+      window.parent.postMessage(msg, "*");
+    }
+
+	function loadGame(){
+      var msg = {
+        "messageType": "LOAD_REQUEST",
+      };
+      window.parent.postMessage(msg, "*");
+  }
+
+    // Listen incoming messages, if the messageType
+    // is LOAD then the game state will be loaded.
+    // Note that no checking is done, whether the
+    // gameState in the incoming message contains
+    // correct information.
+    //
+    // Also handles any errors that the service
+    // wants to send (displays them as an alert).
+    window.addEventListener("message", function(evt) {
+      if(evt.data.messageType === "LOAD") {
+        money = evt.data.gameState.money;
+      } else if (evt.data.messageType === "ERROR") {
+        alert(evt.data.info);
+      }
+    });
+
+    // Request the service to set the resolution of the
+    // iframe correspondingly
+    var message =  {
+      messageType: "SETTING",
+      options: {
+      	"width": 600, //Integer
+        "height": 400 //Integer
+        }
+    };
+    window.parent.postMessage(message, "*");
+
+
+    // Hand evaluation functions
+    function checkAces(){
+      var aces = 0;
+      hand.forEach(function(card){
+        if( card > 140 ){
+          aces += 1;
+        }
+      });
+      return aces;
+    }
+
+    function checkFlush(){
+      var suits = [];
+      hand.forEach(function(card){
+        suits.push(card % 10);
+      });
+      suits.sort();
+
+      if ( suits[0] === suits[4] ){
+        return true;
+      }
+      return false;
+    }
+
+    function checkStraight(){
+      var found = true;
+
+      for (var i = 0; i < 4; i++){
+        if(hand[i] - hand[i + 1] !== 1){
+          found = false;
+          break;
+        }
+      }
+
+      if(!found){
+        if ( aces === 1 && hand[4] === 2 ){
+          for (var i = 1; i < 4; i++){
+            if(hand[i] - hand[i + 1] !== 1){
+              return false;
+            }
+          }
+          return true;
+        }
+      } else {
+        return true;
+      }
+      return false;
+    }
+
+    function checkEquals(equals){
+      equals.forEach(function(e){
+        if( e === 2 ){
+          pairs += 1;
+        } else if ( e === 3 ){
+          threes = true;
+        } else if ( e === 4 ){
+          fours = true;
+        }
+      });
+    }
+
+    function checkValues(){
+      var equals = [];
+      var ctr = 1;
+
+      for(var i = 0; i < 4; i++){
+        if(hand[i] === hand[i + 1]){
+          ctr += 1;
+        } else {
+          if (ctr > 1){
+            equals.push(ctr);
+            ctr = 1;
+          }
+        }
+      }
+      if (ctr > 1){
+        equals.push(ctr);
+        ctr = 1;
+      }
+      checkEquals(equals);
+    }
+
+    function checkHand(){
+      hand.sort(function(a, b){
+        return b-a;
+      });
+      aces = checkAces();
+      if (aces === 4){
+        return 40;
+      }
+      flush = checkFlush();
+      removeSuits();
+      straight = checkStraight();
+
+      if (flush){
+        if( straight ){
+          return 50;
+        }
+      }
+
+      checkValues();
+      if( fours ){
+        return 20;
+      }
+      if ( threes && pairs > 0 ){
+        return 10;
+      }
+
+      if (flush){
+        return 8;
+      } else if( straight ){
+        return 6;
+      } else if( threes ){
+        return 3;
+      } else if( pairs === 2 ){
+        return 2;
+      } else if( aces === 2 ){
+        return 1;
+      } else {
+        return 0;
+      }
+    }
+
+    // Card and deck handling functions
+    function shuffleDeck(new_deck){
+      var j, x, i;
+      for (i = new_deck.length; i; i--) {
+        j = Math.floor(Math.random() * i);
+        x = new_deck[i - 1];
+        new_deck[i - 1] = new_deck[j];
+        new_deck[j] = x;
+      }
+
+      return new_deck;
+    }
+
+    function newDeck(){
+      var new_deck = [{"2C":21},{"3C":31},{"4C":41},{"5C":51},{"6C":61},{"7C":71},
+      {"8C":81},{"9C":91},{"10C":101},{"JC":111},{"QC":121},{"KC":131},{"AC":141},
+      {"2D":22},{"3D":32},{"4D":42},{"5D":52},{"6D":62},{"7D":72},{"8D":82},{"9D":92},
+      {"10D":102},{"JD":112},{"QD":122},{"KD":132},{"AD":142},{"2S":23},{"3S":33},
+      {"4S":43},{"5S":53},{"6S":63},{"7S":73},{"8S":83},{"9S":93},{"10S":103},{"JS":113},
+      {"QS":123},{"KS":133},{"AS":143},{"2H":24},{"3H":34},{"4H":44},{"5H":54},{"6H":64},
+      {"7H":74},{"8H":84},{"9H":94},{"10H":104},{"JH":114},{"QH":124},{"KH":134},
+      {"AH":144}];
+      /*var new_deck = [{"4S":43},{"4D":42},{"4C":41},{"4H":44},{"AS":143}];*/
+      return shuffleDeck(new_deck);
+    }
+
+    function drawCards(locks){
+      for (var i = 1; i < 6; i++) {
+        if (!locks.includes(i)) {
+          var card = deck.pop();
+          hand[i - 1] = Object.values(card)[0];
+          $("#card" + String(i)).text(Object.keys(card)[0]);
+        }
+      }
+    }
+
+    function checkLocks(){
+      if (locked.includes(true)) {
+        return true;
+      }
+      return false;
+    }
+
+    function getLocks(){
+      var locks = []
+      var prev = 0;
+
+      while (true){
+        var i = locked.indexOf(true, prev) + 1;
+          if ( i > 0 ){
+            locks.push(i);
+            prev = i;
+        } else {
+          return locks;
+        }
+      }
+    }
+
+    function removeSuits(){
+      for( var i = 0; i < 5; i++ ){
+        hand[i] = Math.round(hand[i] / 10);
+      }
+    }
+
+    function checkResult(){
+      if (result === 0){
+        info = "Nothing. You lost.";
+      } else if (result === 1){
+        info = "Ace pair. You won " + String(winnings) + "$!";
+      } else if (result === 2){
+        info = "Two pairs. You won " + String(winnings) + "$!";
+      } else if (result === 3){
+        info = "Three of a kind. You won " + String(winnings) + "$!";
+      } else if (result === 6){
+        info = "Straight. You won " + String(winnings) + "$!";
+      } else if (result === 8){
+        info = "Flush. You won " + String(winnings) + "$!";
+      } else if (result === 10){
+        info = "Full house. You won " + String(winnings) + "$!";
+      } else if (result === 20){
+        info = "Four of a kind. You won " + String(winnings) + "$!";
+      } else if (result === 40){
+        info = "Four aces. NICE! You won " + String(winnings) + "$!";
+      } else if (result === 50){
+        info = "Straigt flush. WOW! You won " + String(winnings) + "$!";
+      }
+    }
+
+    // Game state changing functions
+    function startHand(){
+      money -= bid;
+      updateMoney();
+      showLocks();
+      hideBidding();
+    }
+
+    function handleResult(){
+      result = checkHand();
+      winnings = bid * result;
+      money += winnings;
+      checkResult();
+      updateInfo();
+      updateMoney();
+    }
+
+    function clearTable(){
+      locked = [ false, false, false, false, false ];
+      flush = false;
+      aces = 0;
+      fours = false;
+      straight = false;
+      threes = false;
+      pairs = 0;
+      result = 0;
+      winnings = 0;
+      info = "";
+      showBidding();
+    }
+
+    function gameOver(){
+      hideBidding();
+      document.getElementById("continue").style.display = "inline";
+    }
+
+    // Element displaying functions
+    function showLocks() {
+      document.getElementById("lock1").style.display = "inline";
+      document.getElementById("lock2").style.display = "inline";
+      document.getElementById("lock3").style.display = "inline";
+      document.getElementById("lock4").style.display = "inline";
+      document.getElementById("lock5").style.display = "inline";
+    }
+
+    function hideBidding(){
+      document.getElementById("min_bid").style.display = "none";
+      document.getElementById("less_bid").style.display = "none";
+      document.getElementById("max_bid").style.display = "none";
+      document.getElementById("more_bid").style.display = "none";
+      document.getElementById("start").style.display = "none";
+      document.getElementById("load").style.display = "none";
+      document.getElementById("save").style.display = "none";
+      document.getElementById("quit").style.display = "none";
+    }
+
+    function showBidding(){
+      if ( bid > money ){
+        bid = money;
+        $("#bid").text(bid);
+      }
+      document.getElementById("min_bid").style.display = "inline";
+      document.getElementById("less_bid").style.display = "inline";
+      document.getElementById("max_bid").style.display = "inline";
+      document.getElementById("more_bid").style.display = "inline";
+      document.getElementById("start").style.display = "inline";
+      document.getElementById("load").style.display = "inline";
+      document.getElementById("save").style.display = "inline";
+      document.getElementById("quit").style.display = "inline";
+    }
+
+    function hideLocks(){
+      document.getElementById("lock1").style.display = "none";
+      document.getElementById("lock2").style.display = "none";
+      document.getElementById("lock3").style.display = "none";
+      document.getElementById("lock4").style.display = "none";
+      document.getElementById("lock5").style.display = "none";
+      document.getElementById("unlock1").style.display = "none";
+      document.getElementById("unlock2").style.display = "none";
+      document.getElementById("unlock3").style.display = "none";
+      document.getElementById("unlock4").style.display = "none";
+      document.getElementById("unlock5").style.display = "none";
+    }
+
+    function updateMoney(){
+      $("#money").text(money);
+    }
+
+    function updateInfo(){
+      $("#info").text(info);
+      document.getElementById("result").style.display = "block";
+    }
+
+    function hideInfo(){
+      $("#info").text("");
+      document.getElementById("result").style.display = "none";
+    }
+
+    function hideGame(){
+      $("#score").text(money);
+      document.getElementById("game_over").style.display = "inline";
+      document.getElementById("game_area").style.display = "none";
+      document.getElementById("rules").style.display = "none";
+      sendScore(money);
+    }
+
+    // Button click handling
+    $("#start").click( function () {
+      hideInfo();
+      deck = newDeck();
+      drawCards([]);
+      startHand();
+      game_state = "started";
+  	})
+
+    $("#deal").click( function () {
+      var locks = getLocks();
+      document.getElementById("deal").style.display = "none";
+      drawCards(locks);
+      hideLocks();
+      handleResult();
+
+      if( money >= minimum_bid ){
+        clearTable();
+        game_state = "bid";
+      } else {
+        gameOver();
+      }
+    })
+
+    $("#more_bid").click( function () {
+  		if (bid+10 > money || bid+10 > maximum_bid){
+  			return;
+  		}
+  		bid += 10;
+  		$("#bid").text(bid);
+  	})
+
+  	$("#less_bid").click( function () {
+  		if(bid-10 >= minimum_bid){
+  			bid -= 10;
+  			$("#bid").text(bid);
+  		}
+  	})
+
+  	$("#max_bid").click( function () {
+  		if(money > maximum_bid){
+  			bid = maximum_bid;
+  		}else{
+  			bid = money;
+  		}
+  		$("#bid").text(bid);
+  	})
+
+  	$("#min_bid").click( function () {
+      if( money >= minimum_bid ){
+		    bid = minimum_bid;
+	      $("#bid").text(bid);
+      }
+  	})
+
+    $("#lock1").click( function () {
+      document.getElementById("lock1").style.display = "none";
+      document.getElementById("unlock1").style.display = "inline";
+      document.getElementById("deal").style.display = "inline";
+      locked[0] = true;
+  	})
+
+    $("#lock2").click( function () {
+      document.getElementById("lock2").style.display = "none";
+      document.getElementById("unlock2").style.display = "inline";
+      document.getElementById("deal").style.display = "inline";
+      locked[1] = true;
+  	})
+
+    $("#lock3").click( function () {
+      document.getElementById("lock3").style.display = "none";
+      document.getElementById("unlock3").style.display = "inline";
+      document.getElementById("deal").style.display = "inline";
+      locked[2] = true;
+  	})
+
+    $("#lock4").click( function () {
+      document.getElementById("lock4").style.display = "none";
+      document.getElementById("unlock4").style.display = "inline";
+      document.getElementById("deal").style.display = "inline";
+      locked[3] = true;
+    })
+
+    $("#lock5").click( function () {
+      document.getElementById("lock5").style.display = "none";
+      document.getElementById("unlock5").style.display = "inline";
+      document.getElementById("deal").style.display = "inline";
+      locked[4] = true;
+  	})
+
+    $("#unlock1").click( function () {
+      document.getElementById("lock1").style.display = "inline";
+      document.getElementById("unlock1").style.display = "none";
+      locked[0] = false;
+      if (!checkLocks()) {
+        document.getElementById("deal").style.display = "none";
+      }
+  	})
+
+    $("#unlock2").click( function () {
+      document.getElementById("lock2").style.display = "inline";
+      document.getElementById("unlock2").style.display = "none";
+      locked[1] = false;
+      if (!checkLocks()) {
+        document.getElementById("deal").style.display = "none";
+      }
+  	})
+
+    $("#unlock3").click( function () {
+      document.getElementById("lock3").style.display = "inline";
+      document.getElementById("unlock3").style.display = "none";
+      locked[2] = false;
+      if (!checkLocks()) {
+        document.getElementById("deal").style.display = "none";
+      }
+  	})
+
+    $("#unlock4").click( function () {
+      document.getElementById("lock4").style.display = "inline";
+      document.getElementById("unlock4").style.display = "none";
+      locked[3] = false;
+      if (!checkLocks()) {
+        document.getElementById("deal").style.display = "none";
+      }
+  	})
+
+    $("#unlock5").click( function () {
+      document.getElementById("lock5").style.display = "inline";
+      document.getElementById("unlock5").style.display = "none";
+      locked[4] = false;
+      if (!checkLocks()) {
+        document.getElementById("deal").style.display = "none";
+      }
+  	})
+
+    $("#continue").click( function () {
+      hideGame();
+      game_state = "over";
+  	})
+
+    $("#save").click( function () {
+      saveGame();
+  	})
+
+    $("#load").click( function () {
+      loadGame();
+    })
+
+    $("#quit").click( function () {
+      hideGame();
+    })
+});
+  </script>
+
+  <style>
+  button#deal, button#lock1, button#lock2, button#lock3, button#lock4, button#lock5 {
+    display: none;
+  }
+
+  button#unlock1, button#unlock2, button#unlock3, button#unlock4, button#unlock5 {
+    display: none;
+  }
+
+  h4#result, button#continue, div#game_over {
+    display: none;
+  }
+
+  #left {
+    width: 350px;
+    float: left;
+  }
+
+  #rules {
+    float: left;
+  }
+
+  </style>
+
+</head>
+<body>
+  <div id="left">
+    <h1>Ace Poker</h1>
+    <div id="game_area">
+      <h3>Your Hand</h3>
+      <table id="hand">
+        <tr>
+          <td id="card1"></td>
+          <td id="card2"></td>
+          <td id="card3"></td>
+          <td id="card4"></td>
+          <td id="card5"></td>
+        </tr>
+        <tr>
+          <td><button id=lock1>Lock</button></td>
+          <td><button id=lock2>Lock</button></td>
+          <td><button id=lock3>Lock</button></td>
+          <td><button id=lock4>Lock</button></td>
+          <td><button id=lock5>Lock</button></td>
+        </tr>
+        <tr>
+          <td><button id=unlock1>Unlock</button></td>
+          <td><button id=unlock2>Unlock</button></td>
+          <td><button id=unlock3>Unlock</button></td>
+          <td><button id=unlock4>Unlock</button></td>
+          <td><button id=unlock5>Unlock</button></td>
+        </tr>
+      </table>
+      <h4 id="result">You have:</h4>
+      <p id="info"></p><br>
+      <p>
+        <span id="money">200</span>$ Money <br>
+        <button id="min_bid">Min</button>
+        <button id="less_bid">-</button>
+        Bid:
+        <span id="bid">50</span>$
+        <button id="more_bid">+</button>
+        <button id="max_bid">Max</button><br><br>
+        <button id="deal">Deal</button>
+        <button id="start">Start Hand</button>
+        <button id="continue">Continue</button>
+      </p>
+        <button id="save">Save</button>
+        <button id="load">Load</button>
+        <button id="quit">Quit (Submit Score)</button>
+      <p>
+
+      </p>
+
+    </div>
+    <div id="game_over">
+      <h3>Game Over</h3>
+      <p>Your score was:</p>
+      <p id="score">s</p>
+    </div>
+  </div>
+
+  <div id="rules">
+  	<h3>Prize Table</h3>
+    <table>
+      <tr>
+        <th>Hand</td>
+        <th>Return</td>
+      </tr>
+      <tr>
+        <td>Straight Flush</td>
+        <td>50X</td>
+      </tr>
+      <tr>
+        <td>Four Aces</td>
+        <td>40X</td>
+      </tr>
+      <tr>
+        <td>Four of a kind</td>
+        <td>20X</td>
+      </tr>
+      <tr>
+        <td>Full House</td>
+        <td>10X</td>
+      </tr>
+      <tr>
+        <td>Flush</td>
+        <td>8X</td>
+      </tr>
+      <tr>
+        <td>Straight</td>
+        <td>6X</td>
+      </tr>
+      <tr>
+        <td>Three of a kind</td>
+        <td>3X</td>
+      </tr>
+      <tr>
+        <td>Two pair</td>
+        <td>2X</td>
+      </tr>
+      <tr>
+        <td>Ace pair</td>
+        <td>1X</td>
+      </tr>
+  </div>
+</body>
+</html>
