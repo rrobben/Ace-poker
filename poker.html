@@ -83,7 +83,7 @@
       messageType: "SETTING",
       options: {
       	"width": 600, //Integer
-        "height": 400 //Integer
+        "height": 450 //Integer
         }
     };
     window.parent.postMessage(message, "*");
@@ -336,6 +336,13 @@
       document.getElementById("continue").style.display = "inline";
     }
 
+    function newGame(){
+      clearTable();
+      game_state = "bid";
+      money = 200;
+      bid = 50;
+    }
+
     // Element displaying functions
     function showLocks() {
       document.getElementById("lock1").style.display = "inline";
@@ -404,6 +411,16 @@
       document.getElementById("game_area").style.display = "none";
       document.getElementById("rules").style.display = "none";
       sendScore(money);
+    }
+
+    function showGame(){
+      $("#money").text(money);
+      $("#bid").text(bid);
+      document.getElementById("info").style.display = "none";
+      document.getElementById("result").style.display = "none";
+      document.getElementById("game_over").style.display = "none";
+      document.getElementById("game_area").style.display = "inline";
+      document.getElementById("rules").style.display = "inline";
     }
 
     // Button click handling
@@ -557,6 +574,11 @@
     $("#quit").click( function () {
       hideGame();
     })
+
+    $("#new_game").click( function () {
+      newGame();
+      showGame();
+    })
 });
   </script>
 
@@ -639,6 +661,7 @@
       <h3>Game Over</h3>
       <p>Your score was:</p>
       <p id="score">s</p>
+      <button id="new_game">New Game</button>
     </div>
   </div>
 
