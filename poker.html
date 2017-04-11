@@ -72,6 +72,7 @@
     window.addEventListener("message", function(evt) {
       if(evt.data.messageType === "LOAD") {
         money = evt.data.gameState.money;
+        updateMoney();
       } else if (evt.data.messageType === "ERROR") {
         alert(evt.data.info);
       }
