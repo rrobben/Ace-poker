@@ -39,7 +39,7 @@
   function sendScore(score) {
       var msg = {
         "messageType": "SCORE",
-        "score": parseInt(score)
+        "score": score
       };
       window.parent.postMessage(msg, "*");
     }
@@ -48,7 +48,7 @@
       var msg = {
         "messageType": "SAVE",
         "gameState": {
-          "money": parseInt(money)
+          "money": toString(money)
         }
       };
       window.parent.postMessage(msg, "*");
@@ -71,7 +71,7 @@
     // wants to send (displays them as an alert).
     window.addEventListener("message", function(evt) {
       if(evt.data.messageType === "LOAD") {
-        money = evt.data.gameState.money;
+        money = parseInt(evt.data.gameState.money);
         updateMoney();
       } else if (evt.data.messageType === "ERROR") {
         alert(evt.data.info);
